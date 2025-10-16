@@ -1,11 +1,14 @@
-name: environment
+name: wizardry
+channels:
+  - conda-forge
+  - defaults
 dependencies:
+  - python=3.11
   - spyder
   - numpy
   - matplotlib
   - pandas
   - scipy
-  - pathlib
   - statsmodels
   - jupyterlab
   - ipykernel
@@ -14,7 +17,3 @@ dependencies:
   - openpyxl
   - seaborn
   - plotly
-  - cartopy
-  - cmocean
-
-
