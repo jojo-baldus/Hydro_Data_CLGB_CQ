@@ -1,0 +1,19 @@
+name: environment
+dependencies:
+  - numpy
+  - matplotlib
+  - pandas
+  - scipy
+  - pathlib
+  - statsmodels
+  - jupyterlab
+  - ipykernel
+  - ipywidgets
+  - notebook
+  - openpyxl
+  - seaborn
+  - plotly
+  - cartopy
+  - cmocean
+
+
