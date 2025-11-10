@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python
   - spyder
   - numpy
   - matplotlib
@@ -11,9 +11,3 @@ dependencies:
   - scipy
   - statsmodels
   - jupyterlab
-  - ipykernel
-  - ipywidgets
-  - notebook
-  - openpyxl
-  - seaborn
-  - plotly
