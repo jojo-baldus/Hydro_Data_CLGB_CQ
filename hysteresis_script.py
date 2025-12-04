@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import dates as mdates
+import seaborn as sns
 
 import plotly.graph_objects as go
 #from scipy.integrate import simpson
@@ -24,7 +25,7 @@ import plotly.graph_objects as go
 #%% Specified parameters to change!
 
 CLGB_AG_q_files = ['CLGBag_Q_2022-2025.csv']
-CLGB_AG_n_files = ['CLGBag_N_2022-2023.csv', 'CLGBag_N_2024.csv']
+CLGB_AG_n_files = ['CLGBag_N_2022-2023.csv', 'CLGBag_N_2024.csv', 'CLGBag_N_raw_2025.csv']
 
 CLGB_UP_q_files = ['CLGB.UP_2024-2025_DISCHARGE_OFFICIAL-2025-09-17.csv']
 CLGB_UP_n_files = ['CLGBup_N_raw_2025.csv']
@@ -42,6 +43,14 @@ def load(filename):
 #%% data df creation
 
 def data_wizardy(n_files, q_files):
+    '''
+    Reads in, cleans, and merges all N and Q data for one site.
+    
+    Returns:
+        data : complete df with merged N and Q datasets and datetime index, erroneous data dropped/set to Nan
+        raw_ndata : df with all provided N data files merged, Datetime index, but no further cleaning
+        raw_qdata : df with all provided q data files merged, Datetime index, but no further cleaning
+    '''
     
     # Load all N file(s)
     raw_ndata = pd.DataFrame()
@@ -156,7 +165,7 @@ def AI_interactive_plot(data, sitename):
     
     # --- Layout settings
     fig.update_layout(
-        title=f'{sitename}, NH: Q versus N over time (Interactive)',
+        title=f'{sitename}: Q versus N over time (Interactive)',
         xaxis=dict(
             title="Date",
             type="date",
@@ -192,8 +201,8 @@ def AI_interactive_plot(data, sitename):
     fig.show()
 
 #%%
-AI_interactive_plot(data=data_CLGB_AG, sitename="CLGB.AG")
-AI_interactive_plot(data=data_CLGB_UP, sitename="CLGB.UP")
+#AI_interactive_plot(data=data_CLGB_AG, sitename="CLGB.AG")
+#AI_interactive_plot(data=data_CLGB_UP, sitename="CLGB.UP")
 
 #%% Create storm df
 
@@ -208,6 +217,11 @@ storm_list = [
     ('CLGB.AG', '2023-06-14 16:00', '2023-06-15 16:00'),
     ('CLGB.AG', '2023-06-16 22:00', '2023-06-17 10:30'),
     ('CLGB.AG', '2023-06-17 11:00', '2023-06-18 16:00'),
+    
+    ('CLGB.AG', '2025-05-03 15:00', '2025-05-04 02:00'),
+    ('CLGB.AG', '2025-05-04 18:00', '2025-05-05 18:00'),
+    ('CLGB.AG', '2025-05-09 17:00', '2025-05-10 21:00'),
+
     ('CLGB.UP', '2025-05-03 14:45', '2025-05-04 00:45'),
     ('CLGB.UP', '2025-05-04 17:00', '2025-05-05 19:30'),
     ('CLGB.UP', '2025-05-09 16:00', '2025-05-10 21:00')
@@ -226,7 +240,7 @@ storms.index.name = 'storm'
 
 def CQplot(data, start, end, title_preamble):
     
-    trim = data.loc[start:end]
+    trim = data.loc[start:end].copy()
     #print(start)
     #print(trim)
     
@@ -265,24 +279,35 @@ def CQplot(data, start, end, title_preamble):
     
     # Convert datetime index to numeric (for color mapping)
     time_numeric = mdates.date2num(trim.index)
+
+    fig, ax1 = plt.subplots(figsize=(8, 6))
+
+    trim["flux"] = trim.N * trim.Q
     
-    # Create the scatter plot with color mapping
-    fig, ax1 = plt.subplots(figsize=(8, 8))
-    
-    # Line connecting points (sorted in time order)
-    ax1.plot(
-        trim.Q, trim.N,
-        color='gray', linewidth=0.8, alpha=0.6, zorder=1
+    # Plot bars along Q axis, with small height proportional to flux
+    # We'll map flux to a thin vertical bar at each Q
+    flux_scaled = trim["flux"] / trim["flux"].max() * trim["N"].max() * 0.3  # scale to 30% of max N
+    ax1.bar(
+        trim["Q"],
+        flux_scaled,
+        width=trim["Q"].max()*0.005,  # narrow bars
+        color='gray',
+        alpha=0.5,
+        zorder=0
     )
     
-    # Scatter of points
+    # --- Line connecting points ---
+    ax1.plot(trim.Q, trim.N, color='gray', linewidth=0.8, alpha=0.6, zorder=1)
+    
+    # --- Scatter of points ---
     sc = ax1.scatter(
         trim.Q,
         trim.N,
-        c=time_numeric,           # Color by time
-        cmap='viridis_r',         # Other options: 'plasma', 'cividis', 'turbo', _r reverses
+        c=time_numeric,           
+        cmap='viridis_r',         
         linewidth=0.5,
-        edgecolor='none'
+        edgecolor='none',
+        zorder=2
     )
     
     ax1.set_ylabel("Nitrate concentration (mg/L)", fontsize=13)
@@ -291,8 +316,6 @@ def CQplot(data, start, end, title_preamble):
     
     # Add colorbar showing the date scale
     cbar = plt.colorbar(sc, ax=ax1)
-    
-    # Format the colorbar ticks as readable dates
     cbar.ax.yaxis.set_major_formatter(mdates.DateFormatter('%H'))
     cbar.set_label("Storm event time progression", fontsize=13)
     
@@ -300,11 +323,17 @@ def CQplot(data, start, end, title_preamble):
                  ha='right', va='top', fontsize=10, color='black')
     cbar.ax.text(1.0, 1.01, 'End', transform=cbar.ax.transAxes,
                  ha='right', va='bottom', fontsize=10, color='black')  
+    
     plt.show()
 
-#%% C-Q plot function calls
+#%% Call CQplot for desired or all storms
 
-for event in storms.index:
+plot_list = [6]
+
+# if you would like to plot all storms
+#plot_list = storms.index
+
+for event in plot_list:
     start=storms.loc[event, 'start']
     end=storms.loc[event, 'end']
     site = storms.loc[event, 'site']
@@ -320,18 +349,16 @@ for event in storms.index:
         continue
     
     CQplot(data=data, start=start, end=end, title_preamble=f'{site}, storm {event}')
-    
+
 #%% Hysteresis analyses
 
 # Initialize columns in storms df to hold hysteresis data
 storms[['h', 'hyst_class', 'diff_area_max', 'diff_area_min', 'x_fixed_start']] = np.nan
 
-def hi(storm_data, start, end, idx, title_preamble):
-    
+def hi(storm_data, start, end, idx, title_preamble, plots=[]):
+    #plots arg specifies which if any storms you would like the integrals plotted
     import zuecco_h as zh
-    
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
-    
+        
     x = storm_data['Q']
     y = storm_data['N']
     
@@ -348,26 +375,27 @@ def hi(storm_data, start, end, idx, title_preamble):
             storms.loc[idx, 'diff_area_min'] = diff_area.min()
             storms.loc[idx, 'x_fixed_start'] = x_fixed_try.iloc[0]
             
-            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
-            # Plot after successful run
-            ax1 = axes[0]
-            ax2 = axes[1]
-            
-            ax1.plot(x,y)
-            ax1.set_xlabel("Discharge (Q)")
-            ax1.set_ylabel("Nitrate (C)")
-            ax1.set_title(f'{title_preamble}: Zuecco hysteresis analysis')
-            
-            x2 = [0, 0.5, 1]
-            y2 = [0, 0, 0]
-            
-            ax2.plot(x_fixed_try[:-1], diff_area, color="red")
-            ax2.plot(x2, y2, color="black")
-            ax2.set_xlabel('Streamflow (-)')
-            ax2.set_ylabel('ΔA (-)')
-            ax2.set_title(f'{title_preamble}: Difference between the integrals')
-            
-            fig.tight_layout()
+            if idx in plot_list:
+                fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
+                # Plot after successful run
+                ax1 = axes[0]
+                ax2 = axes[1]
+                
+                ax1.plot(x,y)
+                ax1.set_xlabel("Discharge (Q)")
+                ax1.set_ylabel("Nitrate (C)")
+                ax1.set_title(f'{title_preamble}: Zuecco hysteresis analysis')
+                
+                x2 = [0, 0.5, 1]
+                y2 = [0, 0, 0]
+                
+                ax2.plot(x_fixed_try[:-1], diff_area, color="red")
+                ax2.plot(x2, y2, color="black")
+                ax2.set_xlabel('Streamflow (-)')
+                ax2.set_ylabel('ΔA (-)')
+                ax2.set_title(f'{title_preamble}: Difference between the integrals')
+                
+                fig.tight_layout()
             break  # success, exit fallback loop
             
         except ValueError:
@@ -384,7 +412,8 @@ data_CLGB_AG['flux_mg_s'] = data_CLGB_AG['N'] * data_CLGB_AG['Q'] * 1000.0
 
 #%% storm analysis function
 
-def storm_analysis(storms, site1, data1, site2, data2):
+def storm_analysis(storms, site1, data1, site2, data2, plots=[]):
+    #plots arg specifies which if any storms you would like the integrals plotted
 
     # initialize metric columns
     storms['Qmax_time'] = pd.NaT  # NaT = Not-a-Time for datetime
@@ -427,7 +456,7 @@ def storm_analysis(storms, site1, data1, site2, data2):
         storms.loc[event, 'Qmax_time'] = Qmax_time
         storms.loc[event, 'Qmax'] = Qmax
         storms.loc[event, 'Nmax_conc'] = Nmax
-        storms.loc[event, 'flushing_slope'] = (Nmax-Nstart) / ((Qmax_time - start).total_seconds()/3600) # mg/L per hour
+        storms.loc[event, 'flushing_slope'] = (trim.loc[Qmax_time, 'N'] - Nstart) / ((Qmax_time - trim.index[0]).total_seconds()/(3600*24)) # mg/L per day
         storms.loc[event, 'Nflux_max_mg_s'] = trim['flux_mg_s'].max()
         storms.loc[event, 'Nflux_avg_mg_s'] = trim['flux_mg_s'].mean()
         storms.loc[event, 'N_conc_percent_change'] = (Nmax/Nstart)*100
@@ -437,12 +466,64 @@ def storm_analysis(storms, site1, data1, site2, data2):
         t_seconds = (trim.index.view('int64') // 1_000_000_000).astype(float)
         storms.loc[event, 'N_storm_yield_kg'] = np.trapz(trim['flux_mg_s'], t_seconds) / 1e6
         
-        hi(storm_data=trim, start=start, end=end, idx=event, title_preamble=f'{site}, storm {event}')
+        hi(storm_data=trim, start=start, end=end, idx=event, title_preamble=f'{site}, storm {event}', plots=plot_list)
         
     return storms
         
-#%%
-storms = storm_analysis(storms=storms, site1='CLGB.AG', data1=data_CLGB_AG, site2='CLGB.UP', data2=data_CLGB_UP)
+#%% Call storm_analysis, specificying whcih storms to plot in hi()
+
+# to control which storms for which you want to plot the integrals as part of hi()
+plot_list = [6]
+# if you would like to plot all storms
+#plot_list = storms.index.tolist()
+
+storms = storm_analysis(storms=storms, site1='CLGB.AG', data1=data_CLGB_AG, site2='CLGB.UP', data2=data_CLGB_UP, plots=plot_list)
+
+
+#%% Box plots
+
+# Metrics you want to compare
+metrics = ["h", 
+           "Nmax_conc", 
+           "N_conc_percent_change", 
+           "flushing_slope", 
+           "N_storm_yield_kg",
+           "Nflux_avg_mg_s"]
+
+fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+
+# Flatten axes array for easy iteration
+axes = axes.flatten()
+
+for ax, metric in zip(axes, metrics):
+    sns.boxplot(
+        data=storms,
+        x="site",
+        y=metric,
+        ax=ax,
+        hue='site',
+        palette="Set3",
+        width=0.5
+    )
+    
+    sns.stripplot(
+        data=storms,
+        x="site",
+        y=metric,
+        ax=ax,
+        color="black",
+        alpha=0.6,
+        jitter=0.2,
+        size=4
+    )
+    
+    ax.set_title(metric.replace("_", " "), fontsize=12, y=1.02)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+fig.suptitle("Comparison of storm metrics for CLGB.AG vs CLGB.UP", fontsize=18, y=1.03)
+plt.tight_layout()
+plt.show()
 
 #%% Results table
 
@@ -466,14 +547,11 @@ storms.style.set_caption("Hysteresis Analysis of Storms") \
         ]
     ) \
     .format({
-        # existing metrics
         "h": "{:.2f}",
         "hyst_class": "{:.0f}",
         "diff_area_max": "{:.4f}",
         "diff_area_min": "{:.4f}",
         "x_fixed_start": "{:.2f}",
-
-        # new metrics — added & formatted
         "Nstart_conc": "{:.3f}",             # mg/L
         "Qmax": "{:.3f}",                    # m³/s typically
         "Nmax_conc": "{:.3f}",               # mg/L
