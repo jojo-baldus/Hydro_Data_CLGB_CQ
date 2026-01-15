@@ -1,6 +1,6 @@
 name: environment
 dependencies:
-  - numpy
+  - numpy=1.26
   - matplotlib
   - pandas
   - scipy
